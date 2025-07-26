@@ -1,0 +1,68 @@
+version: "3.9"
+
+################################################################################
+#  windows-rag-compose.yml  – runs the whole RAG stack on Windows‑11 + NVIDIA GPU  #
+#  • Ollama gets GPU pass‑through (WSL 2 backend)                              #
+#  • Qdrant, OpenWebUI, LlamaIndex‑worker run CPU‑only                         #
+#  • Works unchanged on Linux hosts that have NVIDIA & nvidia‑container‑toolkit#
+################################################################################
+services:
+  # --------------------------- 1 · LLM host ----------------------------------
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"                 # REST & WebSocket
+    volumes:
+      - ollama_models:/root/.ollama   # keep pulled models between restarts
+    # ► GPU reservation (Docker Desktop for Windows, WSL 2) :contentReference[oaicite:0]{index=0}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia          # leave blank for any NVIDIA driver
+              count: all              # or 1,2…
+              capabilities: [gpu]
+
+  # --------------------------- 2 · Vector DB ---------------------------------
+  qdrant:
+    image: qdrant/qdrant:v1.9.0
+    container_name: qdrant
+    ports:
+      - "6333:6333"                   # REST & gRPC
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  # --------------------------- 3 · End‑user UI -------------------------------
+  openwebui:
+    image: ghcr.io/open-webui/open-webui:latest
+    container_name: openwebui
+    depends_on:                        # wait for back end services
+      - ollama
+      - qdrant
+    ports:
+      - "3000:8080"                   # Browser → http://localhost:3000
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - QDRANT_URL=http://qdrant:6333
+    volumes:
+      - webui_data:/app/backend/data  # keeps user settings / uploads
+
+  # --------------------------- 4 · Ingestion worker --------------------------
+  llamaindex-worker:
+    build: ./worker                   # tiny Dockerfile + requirements.txt
+    container_name: llamaindex-worker
+    depends_on:
+      - ollama
+      - qdrant
+    volumes:
+      - ./watched_docs:/data          # **drag and drop folder**
+    environment:
+      - OLLAMA_URL=http://ollama:11434
+      - QDRANT_URL=http://qdrant:6333
+
+# --------------------------------------------------------------------------- #
+volumes:
+  ollama_models:
+  qdrant_data:
+  webui_data:

@@ -1,0 +1,2 @@
+### windows-rag-compose.yaml:
+    This is a Docker compose file that will create a stack on a windows machine with a nVidia GPU. I depends on a Docker image created from the worker folder that processes uploads. It's purpuse is to create a simple RAG.
