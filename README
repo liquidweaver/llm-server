@@ -1,2 +1,17 @@
 ### windows-rag-compose.yaml:
-    This is a Docker compose file that will create a stack on a windows machine with a nVidia GPU. I depends on a Docker image created from the worker folder that processes uploads. It's purpuse is to create a simple RAG.
+    This is a Docker compose file that will create a stack on a windows machine with a nVidia GPU. I depends on a Docker image created from the worker folder that processes uploads. It's purpose is to create a simple RAG.
+
+### windows-rag-compose.amd-wsl.yaml
+    Similar, but for AMD
+
+### wsl-open-port.ps1
+
+
+### First time setup
+powershell -ExecutionPolicy Bypass -File .\wsl-open-port.ps1 -Action refresh -Port 3000 -Distro "Ubuntu" -IPv6
+
+### To remove port map
+.\wsl-open-port.ps1 -Action remove -Port 3000
+
+
+
