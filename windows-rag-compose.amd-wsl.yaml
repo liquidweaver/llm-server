@@ -1,0 +1,70 @@
+version: "3.9"
+
+################################################################################
+# windows-rag-compose.amd-wsl.yaml - Run RAG stack with AMD GPU inside WSL 2  #
+# - Requires AMD ROCm on WSL and a WSL-supported GPU (RX 7000 series or newer) #
+# - Maps /dev/dxg and dxcore per AMD docs                                       #
+################################################################################
+services:
+  # --------------------------- 1: LLM host ----------------------------------
+  ollama:
+    image: ollama/ollama:rocm
+    container_name: ollama
+    ports:
+      - "11434:11434"                 # REST & WebSocket
+    volumes:
+      - ollama_models:/root/.ollama
+      # Required mounts for ROCm on WSL per AMD docs:
+      - /usr/lib/wsl/lib/libdxcore.so:/usr/lib/libdxcore.so:ro
+      - /opt/rocm/lib/libhsa-runtime64.so.1:/opt/rocm/lib/libhsa-runtime64.so.1:ro
+    devices:
+      - /dev/dxg
+    security_opt:
+      - seccomp:unconfined
+    cap_add:
+      - SYS_PTRACE
+    ipc: host
+    shm_size: "8g"
+
+  # --------------------------- 2: Vector DB ---------------------------------
+  qdrant:
+    image: qdrant/qdrant:v1.9.0
+    container_name: qdrant
+    ports:
+      - "6333:6333"                   # REST & gRPC
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  # --------------------------- 3: End-user UI -------------------------------
+  openwebui:
+    image: ghcr.io/open-webui/open-webui:latest
+    container_name: openwebui
+    depends_on:
+      - ollama
+      - qdrant
+    ports:
+      - "3000:8080"                   # Browser to http://localhost:3000
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - QDRANT_URL=http://qdrant:6333
+    volumes:
+      - webui_data:/app/backend/data  # keeps user settings / uploads
+
+  # --------------------------- 4: Ingestion worker --------------------------
+  llamaindex-worker:
+    build: ./worker                   # tiny Dockerfile + requirements.txt
+    container_name: llamaindex-worker
+    depends_on:
+      - ollama
+      - qdrant
+    volumes:
+      - ./watched_docs:/data          # **drag and drop folder**
+    environment:
+      - OLLAMA_URL=http://ollama:11434
+      - QDRANT_URL=http://qdrant:6333
+
+# --------------------------------------------------------------------------- #
+volumes:
+  ollama_models:
+  qdrant_data:
+  webui_data:
